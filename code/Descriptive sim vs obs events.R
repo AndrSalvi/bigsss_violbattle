@@ -16,11 +16,15 @@ worldmap@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
 drc_map <- worldmap[worldmap$CNTRY_NAME == "Congo, DRC",]
 
 # load simulated events data
-sim_m1 <- read.csv("sim_rast_1.csv")
+#sim_m1 <- read.csv("data/sim_points1.csv")
+
+head(sim_m1)
 sim_m1 <- sim_m1[,2:3]
 colnames(sim_m1) <- c("LONG","LAT") 
 proj <- CRS("+proj=longlat +datum=WGS84") 
 sim_events <- SpatialPointsDataFrame(coords=sim_m1, data=sim_m1, proj4string=proj) 
+sim.road.sp <- SpatialPointsDataFrame(coords=sim.road.df, data=sim.road.df, proj4string=proj) 
+sim.drc.sp <- SpatialPointsDataFrame(coords=sim.drc.df, data=sim.drc.df, proj4string=proj) 
 
 # load observed battle events and VAC
 setwd("/Users/markwilliamson/Documents/BIGSSS CSS")
@@ -34,47 +38,107 @@ drc_battles <- subset(drc_events, EVENT_TYPE %in% c("Battle-Government regains t
                                                     "Battle-Non-state actor overtakes territory"))
 drc_vac <- subset(drc_events, EVENT_TYPE == "Violence against civilians")
 
-
 plot(drc_map)
 points(sim_events, col = alpha("green", 0.4), pch = 20)
 points(drc_battles, col = alpha("blue", 0.4), pch = 20)
 points(drc_vac, col = alpha("red", 0.4), pch = 17)
 
 
-# compute distances between all events of two types
-d <- distm(drc_battles, drc_vac)
+# compute distances between observed and VAC
 
-nrow(d) # battle events
-ncol(d) # VAC events
+d.road <- distm(road_battles, drc_vac)
+d.drc  <- distm(drc_battles, drc_vac)
 
-mean_dist_obs <- vector()
+dim(d.road)
+dim(d.drc)
 
-for (i in 1:nrow(d)) {
-  
-  distances <- sort(c(d[i,]))
+mean_dist_obs_road <- vector()
+mean_dist_obs_drc <- vector()
+
+# Obs Battles - VAC (in roads)
+for (i in 1:nrow(d.road)) {
+  distances <- sort(c(d.road[i,]))
   nearest_neigh <- distances[1:5]
-  mean_dist_obs[i] <- mean(nearest_neigh)
-  
+  mean_dist_obs_road[i] <- mean(nearest_neigh)
 }
 
-# compute distances between all events of two types
-d <- distm(sim_events, drc_vac)
-
-nrow(d) # battle events
-ncol(d) # VAC events
-
-mean_dist_sim <- vector()
-
-for (i in 1:nrow(d)) {
-  
-  distances <- sort(c(d[i,]))
+# Obs Battles - VAC (all DRC)
+for (i in 1:nrow(d.drc)) {
+  distances <- sort(c(d.drc[i,]))
   nearest_neigh <- distances[1:5]
-  mean_dist_sim[i] <- mean(nearest_neigh)
-  
+  mean_dist_obs_drc[i] <- mean(nearest_neigh)
 }
 
-t.test(mean_dist_obs, mean_dist_sim)
+summary(mean_dist_obs_road)
+summary(mean_dist_obs_drc)
 
+# compute distances between simulations and VAC
+
+d.sim.road <- distm(sim.road.df, drc_vac)
+d.sim.drc <- distm(sim.drc.df, drc_vac)
+
+dim(d.sim.road) # battle events
+dim(d.sim.drc) # VAC events
+
+mean_dist_sim_road <- vector()
+mean_dist_sim_drc <- vector()
+
+# Sim Battles - VAC (in roads)
+for (i in 1:nrow(d.sim.road)) {
+  distances <- sort(c(d.sim.road[i,]))
+  nearest_neigh <- distances[1:5]
+  mean_dist_sim_road[i] <- mean(nearest_neigh)
+}
+
+# Sim Battles - VAC (all DRC)
+for (i in 1:nrow(d.sim.drc)) {
+  distances <- sort(c(d.sim.drc[i,]))
+  nearest_neigh <- distances[1:5]
+  mean_dist_sim_drc[i] <- mean(nearest_neigh)
+}
+
+hist(mean_dist_obs_road)
+hist(mean_dist_obs_drc)
+hist(mean_dist_sim_road)
+hist(mean_dist_sim_drc)
+
+t.test(as.vector(mean_dist_obs_drc[,1]), as.vector(mean_dist_sim_drc[,1]))
+
+mean_dist_obs_road <- as.data.frame(mean_dist_obs_road)
+mean_dist_sim_road <- as.data.frame(mean_dist_sim_road)
+mean_dist_obs_drc <- as.data.frame(mean_dist_obs_drc)
+mean_dist_sim_drc <- as.data.frame(mean_dist_sim_drc)
+
+colnames(mean_dist_obs_road) <- c("avg_dist", "cat")
+colnames(mean_dist_sim_road) <- c("avg_dist", "cat")
+colnames(mean_dist_obs_drc) <- c("avg_dist", "cat")
+colnames(mean_dist_sim_drc) <- c("avg_dist", "cat")
+
+mean_dist_obs_road$cat <- "Observed battles (road)"
+mean_dist_sim_road$cat <- "Simulated battles (road)"
+mean_dist_obs_drc$cat <- "Observed battles (DRC)"
+mean_dist_sim_drc$cat <- "Simulated battles (DRC)"
+
+combined.df <-rbind(mean_dist_obs_road,mean_dist_sim_road,mean_dist_obs_drc,mean_dist_sim_drc )
+
+# theme settings
+
+main.theme <- theme_bw() + 
+  theme(legend.key = element_rect(fill = NA, color = NA), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        text = element_text(family = "Roboto", size = 14))
+        theme_set(main.theme)
+        
+# Comparison boxplot
+        
+combined.df$cat <- ordered(combined.df$cat, levels = c("Observed battles (road)", "Simulated battles (road)","Observed battles (DRC)","Simulated battles (DRC)"))
+
+ggplot() + 
+  geom_boxplot(data = combined.df, aes(x=cat, avg_dist/1000)) + 
+  labs(x = "", y = "Avg. Distance (in km)", title = "Distance of battles to five nearest VAC events", subtitle = "Comparison between observed vs. simulated battles") +
+  geom_text(aes(1.5,200, label = "T-test, p < 0.001")) + 
+  geom_text(aes(3.5,200, label = "T-test, p < 0.001"))
 
 
 

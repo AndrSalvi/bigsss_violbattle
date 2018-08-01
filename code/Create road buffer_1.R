@@ -8,6 +8,16 @@ library(dplyr)
 library(sf)
 library(rgeos)
 
+# ----- Packages -----
+p_needed <- c("ggplot2", "reshape2", "tidyverse", "readr", "ggmap", "dplyr", "raster", "maptools", "spatstat", "sp", "cshapes", "rgdal", "geosphere", "sf", "rgeos")
+packages <- rownames(installed.packages())
+p_to_install <- p_needed[!(p_needed %in% packages)]
+if (length(p_to_install) > 0) {
+  install.packages(p_to_install)
+}
+sapply(p_needed, require, character.only = TRUE)
+# --------------------
+
 set.seed(666)
 
 # download cshapes file
@@ -16,8 +26,9 @@ worldmap@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
 drc_map <- worldmap[worldmap$CNTRY_NAME == "Congo, DRC",]
 
 # read in roads data
-setwd("/Users/markwilliamson/Documents/BIGSSS CSS/Exploratory mapping/DRC road network")
-roads <- readOGR("cod_trs_roads_osm.shp")
+setwd("/Users/Jess/Desktop/BIGSSS Summer School on Conflict 2018/bigsss_project_git")
+# /Users/markwilliamson/Documents/BIGSSS CSS/Exploratory mapping/DRC road network
+roads <- readOGR("data/roads/cod_trs_roads_osm.shp")
 roads@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
 
 # take only highways, primary and secondary roads, clip and buffer
@@ -42,9 +53,10 @@ sp_point <- cbind(acled_drc$LONGITUDE, acled_drc$LATITUDE)
 colnames(sp_point) <- c("LONG","LAT") 
 drc_events <- SpatialPointsDataFrame(coords = sp_point, data = acled_drc, 
                                      proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+
 drc_battles <- subset(drc_events, EVENT_TYPE %in% c("Battle-Government regains territory",
-                                                    "Battle-No change of territory",
-                                                    "Battle-Non-state actor overtakes territory"))
+                                                     "Battle-No change of territory",
+                                                     "Battle-Non-state actor overtakes territory") & GEO_PRECISION == 1)
 drc_vac <- subset(drc_events, EVENT_TYPE == "Violence against civilians")
 
 # find intersection with buffer area
