@@ -41,10 +41,39 @@ points(drc_battles, col = alpha("blue", 0.4), pch = 20)
 points(drc_vac, col = alpha("red", 0.4), pch = 17)
 
 
-# compute distances
+# compute distances between all events of two types
+d <- distm(drc_battles, drc_vac)
 
+nrow(d) # battle events
+ncol(d) # VAC events
 
+mean_dist_obs <- vector()
 
+for (i in 1:nrow(d)) {
+  
+  distances <- sort(c(d[i,]))
+  nearest_neigh <- distances[1:5]
+  mean_dist_obs[i] <- mean(nearest_neigh)
+  
+}
+
+# compute distances between all events of two types
+d <- distm(sim_events, drc_vac)
+
+nrow(d) # battle events
+ncol(d) # VAC events
+
+mean_dist_sim <- vector()
+
+for (i in 1:nrow(d)) {
+  
+  distances <- sort(c(d[i,]))
+  nearest_neigh <- distances[1:5]
+  mean_dist_sim[i] <- mean(nearest_neigh)
+  
+}
+
+t.test(mean_dist_obs, mean_dist_sim)
 
 
 
