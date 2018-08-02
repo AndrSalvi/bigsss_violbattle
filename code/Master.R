@@ -11,7 +11,7 @@
 # ====================================
 
 # ----- Packages -----
-p_needed <- c("ggplot2", "reshape2", "tidyverse", "readr", "ggmap", "dplyr", "raster", "maptools", "spatstat", "sp", "cshapes", "rgdal", "geosphere", "sf", "rgeos", "scales")
+p_needed <- c("ggplot2", "reshape2", "tidyverse", "readr", "ggmap", "dplyr", "raster", "maptools", "spatstat", "sp", "cshapes", "rgdal", "geosphere", "sf", "rgeos", "scales", "mwa")
 packages <- rownames(installed.packages())
 p_to_install <- p_needed[!(p_needed %in% packages)]
 if (length(p_to_install) > 0) {
@@ -26,8 +26,9 @@ sapply(p_needed, require, character.only = TRUE)
 # Setting Up Observed and Simulated Data
 # ========================================
 
- setwd("/Users/Jess/Desktop/BIGSSS Summer School on Conflict 2018/BIGSSS Conflict Project Git/data")
+setwd("/Users/Jess/Desktop/BIGSSS Summer School on Conflict 2018/BIGSSS Conflict Project Git/data")
 # setwd("/Users/markwilliamson/Documents/BIGSSS CSS/Exploratory mapping/DRC road network")
+#setwd("C:/Users/Andrea/Documents/GitProjects/bigsss_violbattle/data")
 
 # ---------- DRC shape area ----------
 
@@ -41,6 +42,7 @@ plot(drc_map)
 # ---------- DRC roads buffer ----------
 
 roads <- readOGR("/Users/Jess/Desktop/BIGSSS Summer School on Conflict 2018/Conflict Project/drc_roads/cod_trs_roads_osm.shp") # use your custom directory
+#roads <- readOGR("C:/Users/Andrea/Documents/GitProjects/bigsss_violbattle/data/cod_trs_roads_osm.shp") # use your custom directory
 roads@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
 
 # take only highways, primary and secondary roads, clip and buffer
@@ -128,6 +130,9 @@ for (i in 1:5) {
   sim.road.df <- rbind(sim.road.df, sims.road)
 }
 
+sim.road.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.road.df))
+sim.road.df <- sim.road.df %>% arrange(date)
+
 # Comparing obs to sim
 nrow(road_battles@coords)
 nrow(sim.road.df)
@@ -150,7 +155,9 @@ names(sim.drc.df) <- c("LONG", "LAT")
 
 # Transforming to sp
 proj <- CRS("+proj=longlat +datum=WGS84") 
-sim.road.sp <- SpatialPointsDataFrame(coords=sim.road.df, data=sim.road.df, proj4string=proj) 
+
+sim.road.sp.coo <- cbind(sim.road.df$LONG, sim.road.df$LAT) 
+sim.road.sp <- SpatialPointsDataFrame(coords=sim.road.sp.coo, data=sim.road.df, proj4string=proj) 
 sim.drc.sp <- SpatialPointsDataFrame(coords=sim.drc.df, data=sim.drc.df, proj4string=proj) 
 
 # Visualize observed AND simulated battles
@@ -198,8 +205,8 @@ summary(mean_dist_obs_drc)
 # ---------- Simulated events ----------
 
 # Calculating distance
-d.sim.road <- distm(sim.road.df, drc_vac)
-d.sim.drc <- distm(sim.drc.df, drc_vac)
+d.sim.road <- distm(sim.road.sp, drc_vac)
+d.sim.drc <- distm(sim.drc.sp, drc_vac)
 
 # Checking dimensions
 dim(d.sim.road)
@@ -253,9 +260,9 @@ colnames(mean_dist_sim_drc) <- c("avg_dist", "cat", "area")
 # Combine into one (for ggplot)
 combined.df <-rbind(mean_dist_obs_road,mean_dist_sim_road,mean_dist_obs_drc,mean_dist_sim_drc)
 head(combined.df)
-        
+
 # ---------- Boxplot ----------
-  
+
 # Theme settings
 main.theme <- theme_bw() + 
   theme(legend.key = element_rect(fill = NA, color = NA), 
@@ -280,3 +287,69 @@ ggplot() +
   labs(x = "", y = "Avg. Distance (in km, logged)", title = "Distance of battles to five nearest VAC events", subtitle = "Comparison between observed vs. simulated battles") +
   geom_text(aes(1.5,200, label = "T-test, p < 0.001")) + 
   geom_text(aes(3.5,200, label = "T-test, p < 0.001")) + stat_summary(geom = "crossbar", width=0.65, fatten=0, color="white", fun.data = function(x){c(y=median(x), ymin=median(x), ymax=median(x))}) + guides(color=FALSE, fill = FALSE)
+
+
+#----- DO NOT RUN
+
+# MWA
+
+#Load population data
+population <- raster("gpw_drcv4.tif",proj4string = CRS("+proj=longlat +ellps=WGS84"))
+
+#Build subsets of events and the country polygon
+population_drc <-  crop(population, drc_map)
+
+#Combine all entries
+
+
+con <- as.data.frame(sim.road.sp)
+con
+treat <- as.data.frame(road_battles)
+treat
+dv <- as.data.frame(drc_vac)
+dv
+
+
+
+all_relevant_events <- rbind(con, treat, dv)
+
+#Build MWA dataset
+dataset <- as.data.frame(cbind(rep(as.character("NA"),length(all_relevant_events))))
+names(dataset) <- "type"
+dataset$lon <- 0.0
+dataset$lat <- 0.0
+dataset$timestamp <- as.Date("1900-01-01")
+dataset$population <- 0.0
+
+#Copy the data
+dataset$type <- c(rep("control",length(riots[,1])),rep("treatment",length(protests[,1])),rep("dependent",length(military_actions[,1])))
+dataset$lat  <- c(riots$LATITUDE,protests$LATITUDE,military_actions$LATITUDE)
+dataset$lon  <- c(riots$LONGITUDE,protests$LONGITUDE,military_actions$LONGITUDE)
+dataset$timestamp  <- c(riots$EVENT_DATE,protests$EVENT_DATE,military_actions$EVENT_DATE)
+
+#Now we need to go spatial for the population values
+dataset$population <- c(population_liberia[riots,],population_liberia[protests,],population_liberia[military_actions,])
+
+#MWA Analysis
+# Specify required parameters:
+t_window <- c(5,50,5)
+spat_window <- c(5,50,5)
+t_unit <- "days" 
+TCM <- TRUE
+weighted <- FALSE
+
+treatment <- c("type","treatment")
+# - column and entries that indicate control events 
+control  <- c("type","control")
+# - column and entries that indicate dependent events 
+dependent <- c("type","dependent")
+# - columns for matching
+matchColumns <- c("population")
+
+# Execute method:
+results <- matchedwake(dataset, t_window, spat_window, treatment, control, dependent, matchColumns, weighted = weighted, t_unit = t_unit, TCM = TCM)
+
+plot(results)
+summary(results)
+
+
