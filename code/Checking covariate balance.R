@@ -94,11 +94,18 @@ terrain1 <- raster("10S000E_20101117_gmted_mea300.tif")
 terrain1@crs <- CRS("+proj=longlat +ellps=WGS84 ")
 terrain2 <- raster("10S030E_20101117_gmted_mea300.tif")
 terrain2@crs <- CRS("+proj=longlat +ellps=WGS84 ")
+terrain3 <- raster("30S000E_20101117_gmted_mea300.tif")
+terrain3@crs <- CRS("+proj=longlat +ellps=WGS84 ")
+terrain4 <- raster("30S030E_20101117_gmted_mea300.tif")
+terrain4@crs <- CRS("+proj=longlat +ellps=WGS84 ")
 
-plot(drc_map)
-plot(terrain1, add = TRUE)
-plot(terrain2, add = TRUE)
-plot(drc_map, add = TRUE)
+terrain <- raster::merge(terrain1, terrain2, terrain3, terrain4, extent = drc_map)
+terrain_drc <- crop(terrain, drc_map)
+
+# find elevation at each point 
+sim_terrain <- extract(terrain_drc, sim_events)
+obs_terrain <- extract(terrain_drc, road_battles)
+
 
 
 
