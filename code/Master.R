@@ -122,19 +122,27 @@ road_ppp <- to_ppp(drc_events, roads_buff) # near roads
 
 # Looping a randomized version of point pattern (Road Buffer)
 sim.road.df <- data.frame()
-for (i in 1:3) {
+for (i in 1:5) {
   sims.road <- rpoispp(intensity(road_ppp), win=Window(road_ppp), ex = road_ppp)
   sims.road <- data.frame(sims.road) 
   sim.road.df <- rbind(sim.road.df, sims.road)
 }
 
+# Comparing obs to sim
+nrow(road_battles@coords)
+nrow(sim.road.df)
+
 # Looping a randomized version of point pattern (All DRC)
 sim.drc.df <- data.frame()
-for (i in 1:3) {
+for (i in 1:5) {
   sims.drc <- rpoispp(intensity(drc_ppp), win=Window(drc_ppp), ex = drc_ppp)
   sims.drc <- data.frame(sims.drc) 
   sim.drc.df <- rbind(sim.drc.df, sims.drc)
 }
+
+# Comparing obs to sim
+nrow(drc_battles@coords)
+nrow(sim.drc.df)
 
 # Naming columns
 names(sim.road.df) <- c("LONG", "LAT")
