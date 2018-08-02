@@ -171,6 +171,48 @@ points(road_battles, col = alpha("red", 0.4), pch = 20) # Obs road battles
 # Descriptive: Computing Avg Distances (between observed/sim - battles/VAC)
 # ===========================================================================
 
+# ----- Coverage sensitivity check ------- # 
+
+# iteratively change buffer width
+widths <- seq(1000, 10000, by = 1000)
+battle_capture <- vector()
+area_capture <- vector()
+
+for (i in 1:length(widths)) {
+  
+  # create buffer based on iterative width spec
+  roads_buff <- roads_sub %>% 
+    gBuffer(width = widths[i]) %>%
+    spTransform(CRS("+proj=longlat +ellps=WGS84 ")) %>%
+    gIntersection(drc_map, byid = TRUE)
+  
+  # find intersection of events with buffer area
+  road_battles <- gIntersection(roads_buff, drc_battles, byid = TRUE)
+
+  # percentage of battles falling within road buffer:
+  battle_capture[i] <- nrow(road_battles@coords) / nrow(drc_battles@coords) 
+  # percentage of country territory covered by buffer
+  area_capture[i] <- area(roads_buff) / area(drc_map) 
+  
+}
+
+buffer_percentages <- data.frame(battle_capture, area_capture, width = 1:10)
+
+# or:
+# buffer_percentages <- read.csv("buffer_width_sensitivity.csv")
+
+ggplot() + 
+  geom_line(data = buffer_percentages, aes(width, battle_capture*100), col = "darkgrey") + 
+  geom_line(data = buffer_percentages, aes(width, area_capture*100), col = "black") + 
+  geom_text(aes(c(5.5, 5.5), c(80,25), 
+                label = c("Percentage of battles \n in road buffer", 
+                          "Percentage of country \n area in road buffer"))) + 
+  labs(x = "Width of buffer (km)", y = "%", 
+       title = "Coverage sensitivity of road buffer") + 
+  coord_cartesian(ylim = c(0, 100)) + 
+  scale_x_continuous(breaks = 1:10)
+
+
 # ---------- Observed events ----------
 
 # Calculating distance
