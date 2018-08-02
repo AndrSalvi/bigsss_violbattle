@@ -107,7 +107,21 @@ sim_terrain <- extract(terrain_drc, sim_events)
 obs_terrain <- extract(terrain_drc, road_battles)
 
 
+# Covariate 5: Ethnic composition
+geoepr <- readOGR("GeoEPR.shp")
+drc_map@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
 
+# crop to border
+drc_eth <- gIntersection(geoepr, drc_map, byid = TRUE, drop_lower_td = TRUE)
+drc_eth@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
+
+
+# Count how many eth group polygons each point intersects with
+pointsInPolygons <- sp::over(x = sim_events, y = drc_eth, returnList = TRUE)
+counting <- lapply(pointsInPolygons, FUN = function(x) length(x))
+num_eth_grp <- t(do.call("cbind", counting))
+
+hist(num_eth_grp)
 
 
 
