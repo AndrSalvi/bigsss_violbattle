@@ -82,8 +82,8 @@ points(drc_vac, col = alpha("red", 0.4), pch = 17) # VAC
 
 # ---------- Take events within buffer ---------- #
 
-road_battles <- gIntersection(roads_buff, drc_battles, byid = TRUE)
-road_vac <- gIntersection(roads_buff, drc_vac, byid = TRUE)
+road_battles <- raster::intersect(drc_battles, roads_buff)
+road_vac <- raster::intersect(drc_vac, roads_buff)
 
 # Percentage of events falling within road buffer
 nrow(road_battles@coords) / nrow(drc_battles@coords) # 69% of BATTLES w/i 5km roads
@@ -145,20 +145,26 @@ for (i in 1:5) {
   sim.drc.df <- rbind(sim.drc.df, sims.drc)
 }
 
+sim.drc.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.drc.df))
+sim.drc.df <- sim.drc.df %>% arrange(date)
+
 # Comparing obs to sim
 nrow(drc_battles@coords)
 nrow(sim.drc.df)
 
 # Naming columns
-names(sim.road.df) <- c("LONG", "LAT")
-names(sim.drc.df) <- c("LONG", "LAT")
+names(sim.road.df) <- c("LONG", "LAT", "TIMESTAMP")
+names(sim.drc.df) <- c("LONG", "LAT", "TIMESTAMP")
 
 # Transforming to sp
 proj <- CRS("+proj=longlat +datum=WGS84") 
 
-sim.road.sp.coo <- cbind(sim.road.df$LONG, sim.road.df$LAT) 
-sim.road.sp <- SpatialPointsDataFrame(coords=sim.road.sp.coo, data=sim.road.df, proj4string=proj) 
+#sim.road.sp.coo <- cbind(sim.road.df$LONG, sim.road.df$LAT, sim.road.df$TIMESTAMP) 
+sim.road.sp <- SpatialPointsDataFrame(coords=sim.road.df[,1:2], data=sim.road.df, proj4string=proj) 
+
 sim.drc.sp <- SpatialPointsDataFrame(coords=sim.drc.df, data=sim.drc.df, proj4string=proj) 
+sim.road.sp@data$TIMESTAMP <- sim.road.df$TIMESTAMP
+plot(sim.drc.sp)
 
 # Visualize observed AND simulated battles
 plot(drc_map)
@@ -271,6 +277,10 @@ for (i in 1:nrow(d.sim.drc)) {
   nearest_neigh <- distances[1:5]
   mean_dist_sim_drc[i] <- mean(nearest_neigh)
 }
+
+par(mfrow=c(1,2))
+summary(mean_dist_sim_drc[,1])
+summary(mean_dist_sim_road[,1])
 
 # ---------- T-tests / Creating Dataframe ----------
 
