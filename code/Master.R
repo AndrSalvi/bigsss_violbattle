@@ -11,13 +11,17 @@
 # ====================================
 
 # ----- Packages -----
-p_needed <- c("ggplot2", "reshape2", "tidyverse", "readr", "ggmap", "dplyr", "raster", "maptools", "spatstat", "sp", "cshapes", "rgdal", "geosphere", "sf", "rgeos", "scales", "mwa")
+p_needed <- c("ggplot2", "reshape2", "tidyverse", "readr", "ggmap", "dplyr", "raster", "maptools", "spatstat", "sp", "cshapes", "rgdal", "geosphere", "sf", "rgeos", "scales")
 packages <- rownames(installed.packages())
 p_to_install <- p_needed[!(p_needed %in% packages)]
 if (length(p_to_install) > 0) {
   install.packages(p_to_install)
 }
 sapply(p_needed, require, character.only = TRUE)
+
+library(raster); library(sp); library(rgdal); library(rgeos); library(cshapes); library(dplyr); 
+library(scales); library(spatstat)
+
 # --------------------
 
 #dev.off()
@@ -40,9 +44,7 @@ drc_map <- worldmap[worldmap$CNTRY_NAME == "Congo, DRC",]
 plot(drc_map)
 
 # ---------- DRC roads buffer ----------
-
-roads <- readOGR("/Users/Jess/Desktop/BIGSSS Summer School on Conflict 2018/Conflict Project/drc_roads/cod_trs_roads_osm.shp") # use your custom directory
-#roads <- readOGR("C:/Users/Andrea/Documents/GitProjects/bigsss_violbattle/data/cod_trs_roads_osm.shp") # use your custom directory
+roads <- readOGR("./data/cod_trs_roads_osm.shp")
 roads@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
 
 # take only highways, primary and secondary roads, clip and buffer
@@ -62,7 +64,7 @@ plot(roads_buff, add = TRUE, col = "lightgrey")
 
 # ---------- Load observed events ----------
 
-acled_drc <- read.csv("acled_drc.csv")
+acled_drc <- read.csv("./data/acled_drc.csv")
 sp_point <- cbind(acled_drc$LONGITUDE, acled_drc$LATITUDE) 
 colnames(sp_point) <- c("LONG","LAT") 
 
@@ -81,7 +83,6 @@ points(drc_battles, col = alpha("blue", 0.4), pch = 20) # Battles
 points(drc_vac, col = alpha("red", 0.4), pch = 17) # VAC
 
 # ---------- Take events within buffer ---------- #
-
 road_battles <- raster::intersect(drc_battles, roads_buff)
 road_vac <- raster::intersect(drc_vac, roads_buff)
 
@@ -130,10 +131,11 @@ for (i in 1:5) {
   sim.road.df <- rbind(sim.road.df, sims.road)
 }
 
+# here might be where to change dates to match
 sim.road.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.road.df))
 sim.road.df <- sim.road.df %>% arrange(date)
 
-# Comparing obs to sim
+# Comparing # obs to sim obs
 nrow(road_battles@coords)
 nrow(sim.road.df)
 
@@ -159,11 +161,8 @@ names(sim.drc.df) <- c("LONG", "LAT", "TIMESTAMP")
 # Transforming to sp
 proj <- CRS("+proj=longlat +datum=WGS84") 
 
-#sim.road.sp.coo <- cbind(sim.road.df$LONG, sim.road.df$LAT, sim.road.df$TIMESTAMP) 
 sim.road.sp <- SpatialPointsDataFrame(coords=sim.road.df[,1:2], data=sim.road.df, proj4string=proj) 
-
-sim.drc.sp <- SpatialPointsDataFrame(coords=sim.drc.df, data=sim.drc.df, proj4string=proj) 
-sim.road.sp@data$TIMESTAMP <- sim.road.df$TIMESTAMP
+sim.drc.sp <- SpatialPointsDataFrame(coords=sim.drc.df[,1:2], data=sim.drc.df, proj4string=proj) 
 plot(sim.drc.sp)
 
 # Visualize observed AND simulated battles
@@ -346,41 +345,34 @@ ggplot() +
 # MWA
 
 #Load population data
-population <- raster("gpw_drcv4.tif",proj4string = CRS("+proj=longlat +ellps=WGS84"))
+population <- raster("/Users/markwilliamson/Downloads/gpw-v4-population-count-rev11_2000_2pt5_min_tif/gpw_v4_population_count_rev11_2000_2pt5_min.tif", 
+                     proj4string = CRS("+proj=longlat +ellps=WGS84"))
 
 #Build subsets of events and the country polygon
 population_drc <-  crop(population, drc_map)
 
-#Combine all entries
+#Combine all events types in one df
+road_sim_events <- sim.road.df %>%
+  rename(LATITUDE = LAT, LONGITUDE = LONG, EVENT_DATE = TIMESTAMP) %>%
+  mutate(type = "control")
+road_battle_events <- road_battles@data %>% 
+  mutate(type = "treatment") %>%
+  select(LATITUDE, LONGITUDE, EVENT_DATE, type)
+vac_events <- drc_vac@data %>%
+  mutate(type = "dependent") %>%
+  select(LATITUDE, LONGITUDE, EVENT_DATE, type)
 
+mwa_events <- rbind(road_sim_events, road_battle_events, vac_events)
 
-con <- as.data.frame(sim.road.sp)
-con
-treat <- as.data.frame(road_battles)
-treat
-dv <- as.data.frame(drc_vac)
-dv
-
-
-
-all_relevant_events <- rbind(con, treat, dv)
-
-#Build MWA dataset
-dataset <- as.data.frame(cbind(rep(as.character("NA"),length(all_relevant_events))))
-names(dataset) <- "type"
-dataset$lon <- 0.0
-dataset$lat <- 0.0
-dataset$timestamp <- as.Date("1900-01-01")
-dataset$population <- 0.0
-
-#Copy the data
-dataset$type <- c(rep("control",length(riots[,1])),rep("treatment",length(protests[,1])),rep("dependent",length(military_actions[,1])))
-dataset$lat  <- c(riots$LATITUDE,protests$LATITUDE,military_actions$LATITUDE)
-dataset$lon  <- c(riots$LONGITUDE,protests$LONGITUDE,military_actions$LONGITUDE)
-dataset$timestamp  <- c(riots$EVENT_DATE,protests$EVENT_DATE,military_actions$EVENT_DATE)
 
 #Now we need to go spatial for the population values
-dataset$population <- c(population_liberia[riots,],population_liberia[protests,],population_liberia[military_actions,])
+mwa_events$population <- c(population_drc[sim.road.df,],population_drc[road_battles,],population_drc[drc_vac,])
+
+
+# can't figure out how to link up population with the point events, just going to sim for now
+mwa_events$population <- rnorm(nrow(mwa_events), mean = 1000, sd = 500)
+
+
 
 #MWA Analysis
 # Specify required parameters:
