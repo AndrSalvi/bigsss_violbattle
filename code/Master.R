@@ -30,9 +30,11 @@ library(scales); library(spatstat)
 # Setting Up Observed and Simulated Data
 # ========================================
 
-setwd("/Users/Jess/Desktop/BIGSSS Summer School on Conflict 2018/BIGSSS Conflict Project Git/data")
+#setwd("/Users/Jess/Desktop/BIGSSS Summer School on Conflict 2018/BIGSSS Conflict Project Git/data")
 # setwd("/Users/markwilliamson/Documents/BIGSSS CSS/Exploratory mapping/DRC road network")
-#setwd("C:/Users/Andrea/Documents/GitProjects/bigsss_violbattle/data")
+setwd("C:/Users/Andrea/Documents/GitProjects/bigsss_violbattle/data")
+
+getwd()
 
 # ---------- DRC shape area ----------
 
@@ -44,7 +46,7 @@ drc_map <- worldmap[worldmap$CNTRY_NAME == "Congo, DRC",]
 plot(drc_map)
 
 # ---------- DRC roads buffer ----------
-roads <- readOGR("./data/cod_trs_roads_osm.shp")
+roads <- readOGR("cod_trs_roads_osm.shp")
 roads@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
 
 # take only highways, primary and secondary roads, clip and buffer
@@ -64,7 +66,7 @@ plot(roads_buff, add = TRUE, col = "lightgrey")
 
 # ---------- Load observed events ----------
 
-acled_drc <- read.csv("./data/acled_drc.csv")
+acled_drc <- read.csv("acled_drc.csv")
 sp_point <- cbind(acled_drc$LONGITUDE, acled_drc$LATITUDE) 
 colnames(sp_point) <- c("LONG","LAT") 
 
@@ -131,9 +133,11 @@ for (i in 1:5) {
   sim.road.df <- rbind(sim.road.df, sims.road)
 }
 
-# here might be where to change dates to match
-sim.road.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.road.df))
+# dates of simulated events are sampled from the real ones
+#sim.road.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.road.df))
+sim.road.df$date <-sample(as.Date(road_battles$EVENT_DATE), nrow(sim.road.df))
 sim.road.df <- sim.road.df %>% arrange(date)
+
 
 # Comparing # obs to sim obs
 nrow(road_battles@coords)
@@ -147,8 +151,11 @@ for (i in 1:5) {
   sim.drc.df <- rbind(sim.drc.df, sims.drc)
 }
 
-sim.drc.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.drc.df))
+#sim.drc.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.drc.df))
+sim.drc.df$date <-sample(as.Date(drc_battles$EVENT_DATE), nrow(sim.drc.df))
 sim.drc.df <- sim.drc.df %>% arrange(date)
+
+
 
 # Comparing obs to sim
 nrow(drc_battles@coords)
@@ -193,7 +200,7 @@ for (i in 1:length(widths)) {
   
   # find intersection of events with buffer area
   road_battles <- gIntersection(roads_buff, drc_battles, byid = TRUE)
-
+  
   # percentage of battles falling within road buffer:
   battle_capture[i] <- nrow(road_battles@coords) / nrow(drc_battles@coords) 
   # percentage of country territory covered by buffer
@@ -345,33 +352,76 @@ ggplot() +
 # MWA
 
 #Load population data
-population <- raster("/Users/markwilliamson/Downloads/gpw-v4-population-count-rev11_2000_2pt5_min_tif/gpw_v4_population_count_rev11_2000_2pt5_min.tif", 
+population <- raster("gpw_v4.asc", 
                      proj4string = CRS("+proj=longlat +ellps=WGS84"))
 
 #Build subsets of events and the country polygon
 population_drc <-  crop(population, drc_map)
 
 #Combine all events types in one df
+# getting rid of some vars we don't need
+
 road_sim_events <- sim.road.df %>%
-  rename(LATITUDE = LAT, LONGITUDE = LONG, EVENT_DATE = TIMESTAMP) %>%
-  mutate(type = "control")
+  dplyr::rename(LATITUDE = LAT, LONGITUDE = LONG, EVENT_DATE = date) %>%
+  dplyr::mutate(type = "control") %>% dplyr::select(LONGITUDE, LATITUDE, EVENT_DATE, type)
+
 road_battle_events <- road_battles@data %>% 
-  mutate(type = "treatment") %>%
-  select(LATITUDE, LONGITUDE, EVENT_DATE, type)
+  dplyr::mutate(type = "treatment") %>%
+  dplyr::select(LATITUDE, LONGITUDE, EVENT_DATE, type)
+
+
 vac_events <- drc_vac@data %>%
-  mutate(type = "dependent") %>%
-  select(LATITUDE, LONGITUDE, EVENT_DATE, type)
+  dplyr::mutate(type = "dependent") %>%
+  dplyr::select(LATITUDE, LONGITUDE, EVENT_DATE, type)
+
+names(road_sim_events)
+names(road_battle_events)
+names(vac_events)
 
 mwa_events <- rbind(road_sim_events, road_battle_events, vac_events)
 
+## spat ev
+## we need this to go spatial with the covariates, a bit convoluted but it works
 
-#Now we need to go spatial for the population values
-mwa_events$population <- c(population_drc[sim.road.df,],population_drc[road_battles,],population_drc[drc_vac,])
+sp_point2 <- cbind(road_sim_events$LONGITUDE, road_sim_events$LATITUDE) 
+colnames(sp_point2) <- c("LONG","LAT") 
+
+sp_point3 <- cbind(road_battle_events$LONGITUDE, road_battle_events$LATITUDE) 
+colnames(sp_point3) <- c("LONG","LAT") 
+
+sp_point4 <- cbind(vac_events$LONGITUDE, vac_events$LATITUDE) 
+colnames(sp_point4) <- c("LONG","LAT") 
+
+mwa_events_1 <- SpatialPointsDataFrame(coords = sp_point2, data = road_sim_events, 
+                                     proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+mwa_events_2 <- SpatialPointsDataFrame(coords = sp_point3, data = road_battle_events, 
+                                       proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+mwa_events_3 <- SpatialPointsDataFrame(coords = sp_point4, data = vac_events, 
+                                       proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+
+# create the dataset for MWA
+  
+dataset <- as.data.frame(cbind(rep(as.character("NA"),nrow(mwa_events))))
+names(dataset) <- "type"
+dataset$lon <- 0.0
+dataset$lat <- 0.0
+dataset$timestamp <- as.Date("1900-01-01")
+dataset$population <- 0.0
 
 
-# can't figure out how to link up population with the point events, just going to sim for now
-mwa_events$population <- rnorm(nrow(mwa_events), mean = 1000, sd = 500)
+## copy stuff in the dataset
 
+
+dataset$type <- c(rep("control",length(mwa_events_1[,1])),rep("treatment",length(mwa_events_2[,1])),rep("dependent",length(mwa_events_3[,1])))
+
+dataset$lat  <- c(mwa_events_1$LATITUDE,mwa_events_2$LATITUDE,mwa_events_3$LATITUDE)
+dataset$lon  <- c(mwa_events_1$LONGITUDE,mwa_events_2$LONGITUDE,mwa_events_3$LONGITUDE)
+dataset$timestamp  <-c(mwa_events_1$EVENT_DATE,mwa_events_2$EVENT_DATE,mwa_events_3$EVENT_DATE)
+dataset$timestamp <- as.Date(dataset$timestamp)
+
+#mwa_events$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
+# add covariates, population for now I will add some more 
+dataset$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
 
 
 #MWA Analysis
@@ -391,9 +441,12 @@ dependent <- c("type","dependent")
 matchColumns <- c("population")
 
 # Execute method:
+library(rJava)
+options(java.parameters = "-Xmx1g")
+
+library(mwa)
 results <- matchedwake(dataset, t_window, spat_window, treatment, control, dependent, matchColumns, weighted = weighted, t_unit = t_unit, TCM = TCM)
 
 plot(results)
 summary(results)
-
 
