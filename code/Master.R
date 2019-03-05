@@ -67,6 +67,9 @@ plot(roads_buff, add = TRUE, col = "lightgrey")
 # ---------- Load observed events ----------
 
 acled_drc <- read.csv("acled_drc.csv")
+colnames(acled_drc)
+conflict_years <- (1998:2000)
+acled_drc <- acled_drc %>% filter(YEAR %in% conflict_years)
 sp_point <- cbind(acled_drc$LONGITUDE, acled_drc$LATITUDE) 
 colnames(sp_point) <- c("LONG","LAT") 
 
@@ -135,7 +138,7 @@ for (i in 1:5) {
 
 # dates of simulated events are sampled from the real ones
 #sim.road.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.road.df))
-sim.road.df$date <-sample(as.Date(road_battles$EVENT_DATE), nrow(sim.road.df))
+sim.road.df$date <-sample(as.Date(road_battles$EVENT_DATE), nrow(sim.road.df), replace = TRUE)
 sim.road.df <- sim.road.df %>% arrange(date)
 
 
@@ -152,7 +155,7 @@ for (i in 1:5) {
 }
 
 #sim.drc.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.drc.df))
-sim.drc.df$date <-sample(as.Date(drc_battles$EVENT_DATE), nrow(sim.drc.df))
+sim.drc.df$date <-sample(as.Date(drc_battles$EVENT_DATE), nrow(sim.drc.df), replace = TRUE)
 sim.drc.df <- sim.drc.df %>% arrange(date)
 
 
@@ -361,8 +364,10 @@ population_drc <-  crop(population, drc_map)
 #Combine all events types in one df
 # getting rid of some vars we don't need
 
+colnames(sim.road.df)
+
 road_sim_events <- sim.road.df %>%
-  dplyr::rename(LATITUDE = LAT, LONGITUDE = LONG, EVENT_DATE = date) %>%
+  dplyr::rename(LATITUDE = LAT, LONGITUDE = LONG, EVENT_DATE = TIMESTAMP) %>%
   dplyr::mutate(type = "control") %>% dplyr::select(LONGITUDE, LATITUDE, EVENT_DATE, type)
 
 road_battle_events <- road_battles@data %>% 
@@ -399,6 +404,141 @@ mwa_events_2 <- SpatialPointsDataFrame(coords = sp_point3, data = road_battle_ev
 mwa_events_3 <- SpatialPointsDataFrame(coords = sp_point4, data = vac_events, 
                                        proj4string = CRS("+proj=longlat +ellps=WGS84 "))
 
+
+# covariates
+
+
+library(cshapes)
+library(raster)
+library(maptools)
+library(cshapes)
+library(spatstat)
+library(rgdal)
+library(dplyr)
+library(rgeos)
+library(geosphere)
+
+
+# Covariate 1: Distance to capital 
+kinshasa <- as.data.frame(rbind(c(15.307045, -4.322447)))
+colnames(kinshasa) <- c("LONG","LAT") 
+kinshasa <- SpatialPointsDataFrame(coords = kinshasa, data = kinshasa,
+                                   proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+
+mwa_events_1$capdist <- distm(mwa_events_1, kinshasa)
+mwa_events_2$capdist <- distm(mwa_events_2, kinshasa)
+mwa_events_3$capdist <- distm(mwa_events_3, kinshasa)
+
+
+# Covariate 2: Distance to nearest settlement and number of settlements w/i 5km
+settlements <- readOGR("Localite.shp")
+settlements@coords <- settlements@coords / 100000
+settlements@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
+
+mwa_events_1$settledist <- distm(mwa_events_1, settlements)
+
+mwa1_settle_nearest <- vector()
+mwa1_isolation <- vector()
+
+for (i in 1:nrow(mwa_events_1$settledist)) {
+  
+  # distance to nearest settlement
+  distances <- sort(c(mwa_events_1$settledist[i,]))
+  mwa1_settle_nearest[i] <- distances[1]
+  
+  # number of settlements within 5km of event
+  mwa1_isolation[i] <- length(distances[distances < 5000])
+  
+}
+
+## ---
+
+mwa_events_2$settledist <- distm(mwa_events_2, settlements)
+
+mwa2_settle_nearest <- vector()
+mwa2_isolation <- vector()
+
+for (i in 1:nrow(mwa_events_2$settledist)) {
+  
+  # distance to nearest settlement
+  distances <- sort(c(mwa_events_2$settledist[i,]))
+  mwa2_settle_nearest[i] <- distances[1]
+  
+  # number of settlements within 5km of event
+  mwa2_isolation[i] <- length(distances[distances < 5000])
+  
+}
+
+
+
+## --- 
+
+
+mwa_events_3$settledist <- distm(mwa_events_3, settlements)
+
+mwa3_settle_nearest <- vector()
+mwa3_isolation <- vector()
+
+for (i in 1:nrow(mwa_events_3$settledist)) {
+  
+  # distance to nearest settlement
+  distances <- sort(c(mwa_events_3$settledist[i,]))
+  mwa3_settle_nearest[i] <- distances[1]
+  
+  # number of settlements within 5km of event
+  mwa3_isolation[i] <- length(distances[distances < 5000])
+  
+}
+
+
+
+
+
+# Covariate 4: Terrain
+# Source: https://topotools.cr.usgs.gov/GMTED_viewer/viewer.htm
+#     Mean 30 arc sec
+terrain1 <- raster("10S000E_20101117_gmted_mea300.tif")
+terrain1@crs <- CRS("+proj=longlat +ellps=WGS84 ")
+terrain2 <- raster("10S030E_20101117_gmted_mea300.tif")
+terrain2@crs <- CRS("+proj=longlat +ellps=WGS84 ")
+terrain3 <- raster("30S000E_20101117_gmted_mea300.tif")
+terrain3@crs <- CRS("+proj=longlat +ellps=WGS84 ")
+terrain4 <- raster("30S030E_20101117_gmted_mea300.tif")
+terrain4@crs <- CRS("+proj=longlat +ellps=WGS84 ")
+
+terrain <- raster::merge(terrain1, terrain2, terrain3, terrain4, extent = drc_map)
+terrain_drc <- crop(terrain, drc_map)
+
+# find elevation at each point 
+
+mwa_events_1$terrain <- extract(terrain_drc, mwa_events_1)
+mwa_events_2$terrain <- extract(terrain_drc, mwa_events_2)
+mwa_events_3$terrain <- extract(terrain_drc, mwa_events_3)
+
+# Covariate 5: Ethnic composition
+geoepr <- readOGR("GeoEPR.shp")
+drc_map@proj4string <- CRS("+proj=longlat +ellps=WGS84")
+
+# crop to border
+drc_eth <- gIntersection(geoepr, drc_map, byid = TRUE, drop_lower_td = TRUE)
+drc_eth@proj4string <- CRS("+proj=longlat +ellps=WGS84")
+
+
+
+# Count how many eth group polygons each point intersects with
+pointsInPolygons <- sp::over(x = mwa_events_1, y = drc_eth, returnList = TRUE)
+counting <- lapply(pointsInPolygons, FUN = function(x) length(x))
+mwa_events_1$num_eth_grp <- t(do.call("cbind", counting))
+
+pointsInPolygons <- sp::over(x = mwa_events_2, y = drc_eth, returnList = TRUE)
+counting <- lapply(pointsInPolygons, FUN = function(x) length(x))
+mwa_events_2$num_eth_grp <- t(do.call("cbind", counting))
+
+pointsInPolygons <- sp::over(x = mwa_events_3, y = drc_eth, returnList = TRUE)
+counting <- lapply(pointsInPolygons, FUN = function(x) length(x))
+mwa_events_3$num_eth_grp <- t(do.call("cbind", counting))
+
+
 # create the dataset for MWA
   
 dataset <- as.data.frame(cbind(rep(as.character("NA"),nrow(mwa_events))))
@@ -408,6 +548,10 @@ dataset$lat <- 0.0
 dataset$timestamp <- as.Date("1900-01-01")
 dataset$population <- 0.0
 
+dataset$num_eth_grp <- 0
+dataset$terrain <- 0.0
+dataset$settledist <- 0.0
+dataset$capdist <- 0.0
 
 ## copy stuff in the dataset
 
@@ -422,6 +566,9 @@ dataset$timestamp <- as.Date(dataset$timestamp)
 #mwa_events$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
 # add covariates, population for now I will add some more 
 dataset$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
+
+
+
 
 
 #MWA Analysis
@@ -441,11 +588,14 @@ dependent <- c("type","dependent")
 matchColumns <- c("population")
 
 # Execute method:
+
+dataset1<- dataset[complete.cases(dataset), ] 
+ 
 library(rJava)
 options(java.parameters = "-Xmx1g")
 
 library(mwa)
-results <- matchedwake(dataset, t_window, spat_window, treatment, control, dependent, matchColumns, weighted = weighted, t_unit = t_unit, TCM = TCM)
+results <- matchedwake(dataset1, t_window, spat_window, treatment, control, dependent, matchColumns, weighted = weighted, t_unit = t_unit, TCM = TCM)
 
 plot(results)
 summary(results)
