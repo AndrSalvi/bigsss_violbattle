@@ -398,7 +398,7 @@ sp_point4 <- cbind(vac_events$LONGITUDE, vac_events$LATITUDE)
 colnames(sp_point4) <- c("LONG","LAT") 
 
 mwa_events_1 <- SpatialPointsDataFrame(coords = sp_point2, data = road_sim_events, 
-                                     proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+                                       proj4string = CRS("+proj=longlat +ellps=WGS84 "))
 mwa_events_2 <- SpatialPointsDataFrame(coords = sp_point3, data = road_battle_events, 
                                        proj4string = CRS("+proj=longlat +ellps=WGS84 "))
 mwa_events_3 <- SpatialPointsDataFrame(coords = sp_point4, data = vac_events, 
@@ -428,68 +428,6 @@ kinshasa <- SpatialPointsDataFrame(coords = kinshasa, data = kinshasa,
 mwa_events_1$capdist <- distm(mwa_events_1, kinshasa)
 mwa_events_2$capdist <- distm(mwa_events_2, kinshasa)
 mwa_events_3$capdist <- distm(mwa_events_3, kinshasa)
-
-
-# Covariate 2: Distance to nearest settlement and number of settlements w/i 5km
-settlements <- readOGR("Localite.shp")
-settlements@coords <- settlements@coords / 100000
-settlements@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
-
-mwa_events_1$settledist <- distm(mwa_events_1, settlements)
-
-mwa1_settle_nearest <- vector()
-mwa1_isolation <- vector()
-
-for (i in 1:nrow(mwa_events_1$settledist)) {
-  
-  # distance to nearest settlement
-  distances <- sort(c(mwa_events_1$settledist[i,]))
-  mwa1_settle_nearest[i] <- distances[1]
-  
-  # number of settlements within 5km of event
-  mwa1_isolation[i] <- length(distances[distances < 5000])
-  
-}
-
-## ---
-
-mwa_events_2$settledist <- distm(mwa_events_2, settlements)
-
-mwa2_settle_nearest <- vector()
-mwa2_isolation <- vector()
-
-for (i in 1:nrow(mwa_events_2$settledist)) {
-  
-  # distance to nearest settlement
-  distances <- sort(c(mwa_events_2$settledist[i,]))
-  mwa2_settle_nearest[i] <- distances[1]
-  
-  # number of settlements within 5km of event
-  mwa2_isolation[i] <- length(distances[distances < 5000])
-  
-}
-
-
-
-## --- 
-
-
-mwa_events_3$settledist <- distm(mwa_events_3, settlements)
-
-mwa3_settle_nearest <- vector()
-mwa3_isolation <- vector()
-
-for (i in 1:nrow(mwa_events_3$settledist)) {
-  
-  # distance to nearest settlement
-  distances <- sort(c(mwa_events_3$settledist[i,]))
-  mwa3_settle_nearest[i] <- distances[1]
-  
-  # number of settlements within 5km of event
-  mwa3_isolation[i] <- length(distances[distances < 5000])
-  
-}
-
 
 
 
@@ -540,7 +478,7 @@ mwa_events_3$num_eth_grp <- t(do.call("cbind", counting))
 
 
 # create the dataset for MWA
-  
+
 dataset <- as.data.frame(cbind(rep(as.character("NA"),nrow(mwa_events))))
 names(dataset) <- "type"
 dataset$lon <- 0.0
@@ -550,7 +488,6 @@ dataset$population <- 0.0
 
 dataset$num_eth_grp <- 0
 dataset$terrain <- 0.0
-dataset$settledist <- 0.0
 dataset$capdist <- 0.0
 
 ## copy stuff in the dataset
@@ -566,6 +503,12 @@ dataset$timestamp <- as.Date(dataset$timestamp)
 #mwa_events$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
 # add covariates, population for now I will add some more 
 dataset$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
+
+dataset$num_eth_grp  <- c(mwa_events_1$num_eth_grp,mwa_events_2$num_eth_grp,mwa_events_3$num_eth_grp)
+
+dataset$terrain <- c(mwa_events_1$terrain,mwa_events_2$terrain,mwa_events_3$terrain)
+
+dataset$capdist <- c(mwa_events_1$capdist,mwa_events_2$capdist,mwa_events_3$capdist)
 
 
 
@@ -585,12 +528,12 @@ control  <- c("type","control")
 # - column and entries that indicate dependent events 
 dependent <- c("type","dependent")
 # - columns for matching
-matchColumns <- c("population")
+matchColumns <- c("population", "num_eth_grp", "terrain", "capdist")
 
 # Execute method:
 
 dataset1<- dataset[complete.cases(dataset), ] 
- 
+
 library(rJava)
 options(java.parameters = "-Xmx1g")
 
