@@ -65,7 +65,7 @@ plot(roads_buff, add = TRUE, col = "lightgrey")
 
 
 # ---------- Load observed events ----------
-
+setwd("/Users/markwilliamson/Documents/BIGSSS CSS/bigsss_violbattle/data")
 acled_drc <- read.csv("acled_drc.csv")
 colnames(acled_drc)
 conflict_years <- (1998:2000)
@@ -92,24 +92,12 @@ road_battles <- raster::intersect(drc_battles, roads_buff)
 road_vac <- raster::intersect(drc_vac, roads_buff)
 
 # Percentage of events falling within road buffer
-nrow(road_battles@coords) / nrow(drc_battles@coords) # 69% of BATTLES w/i 5km roads
-nrow(road_vac@coords) / nrow(drc_vac@coords) # 68% of VAC events fall w/i 5km of roads
+nrow(road_battles@coords) / nrow(drc_battles@coords) 
+nrow(road_vac@coords) / nrow(drc_vac@coords) 
 
 # Percentage of country territory covered by 5km road buffer
-area(roads_buff) / area(drc_map) # 13.8%
+area(roads_buff) / area(drc_map) 
 
-# Visualize
-plot(drc_map)
-plot(roads_buff, add = TRUE, col = "lightgrey")
-points(drc_battles, col = alpha("grey", 0.4), pch = 2)
-points(drc_vac, col = alpha("grey", 0.4), pch = 1)
-points(road_battles, col = alpha("blue", 0.5), pch = 17)
-points(road_vac, col = alpha("red", 0.5), pch = 19)
-legend("bottomleft", legend=c("Violence against civilians (in buffer)", "Battle event (in buffer)", 
-                              "Violence against civilians (outside buffer)",
-                              "Battle event (outside buffer)"),
-       col=c("red", "blue", "grey", "grey"), pch = c(19, 17, 1, 2),
-       cex = 0.9, bty = "n")
 
 # ---------- Simulate events ----------
 
@@ -173,14 +161,61 @@ proj <- CRS("+proj=longlat +datum=WGS84")
 
 sim.road.sp <- SpatialPointsDataFrame(coords=sim.road.df[,1:2], data=sim.road.df, proj4string=proj) 
 sim.drc.sp <- SpatialPointsDataFrame(coords=sim.drc.df[,1:2], data=sim.drc.df, proj4string=proj) 
-plot(sim.drc.sp)
 
-# Visualize observed AND simulated battles
+
+# -------Visualize buffer process---------#
+
+# I - Coloured observed battles + VAC
+jpeg("demo_plot1.jpg",units="px", width=1600, height=1600, res=300)
 plot(drc_map)
-points(sim.drc.sp, col = alpha("green", 0.4), pch = 20) # Sim DRC battles
-points(sim.road.sp, col = alpha("blue", 0.4), pch = 20) # Sim road Battles
-points(drc_battles, col = alpha("black", 0.4), pch = 20) # Obs DRC battles
-points(road_battles, col = alpha("red", 0.4), pch = 20) # Obs road battles
+points(drc_battles, col = alpha("blue", 0.4), pch = 2)
+points(drc_vac, col = alpha("red", 0.4), pch = 1)
+legend("bottomleft", legend=c("VAC event", "Battle event"),
+       col=c("red", "blue"), pch = c(1, 2),
+       cex = 0.9, bty = "n")
+dev.off()
+
+# II - Add roadways
+jpeg("demo_plot2.jpg",units="px", width=1600, height=1600, res=300)
+plot(drc_map)
+plot(subset(roads, ntlclass %in% c("motorway", "primary", "primary_link",
+                                   "secondary", "secondary_link")), add = TRUE, col = "lightgrey") 
+points(drc_battles, col = alpha("blue", 0.4), pch = 2)
+points(drc_vac, col = alpha("red", 0.4), pch = 1)
+legend("bottomleft", legend=c("VAC event", "Battle event"),
+       col=c("red", "blue"), pch = c(1, 2),
+       cex = 0.9, bty = "n")
+dev.off()
+
+# III - Add road buffer, grey-out observed VAC 
+jpeg("demo_plot3.jpg",units="px", width=1600, height=1600, res=300)
+plot(drc_map)
+plot(roads_buff, add = TRUE, col = "lightgrey")
+points(drc_battles, col = alpha("lightgrey", 0.4), pch = 2)
+points(drc_vac, col = alpha("lightgrey", 0.4), pch = 1)
+points(road_battles, col = alpha("blue", 0.5), pch = 17)
+points(road_vac, col = alpha("red", 0.5), pch = 19)
+legend("bottomleft", legend=c("VAC event (inside buffer)", "Battle event (inside buffer)", 
+                              "VAC event (outside buffer)", "Battle event (outside buffer)"),
+       col=c("red", "blue", "lightgrey", "lightgrey"), pch = c(19, 17, 1, 2),
+       cex = 0.9, bty = "n")
+dev.off()
+
+# IV - Plot only road buffer - add new simulated points 
+jpeg("demo_plot4.jpg",units="px", width=1600, height=1600, res=300)
+plot(roads_buff, col = "lightgrey")
+points(road_battles, col = alpha("blue", 0.5), pch = 17)
+points(road_vac, col = alpha("red", 0.5), pch = 19)
+points(sim.road.sp[sample(nrow(sim.road.sp), 250),], col = alpha("green", 0.5), pch = 19)
+legend("bottomleft", legend=c("Battle event", 
+                              "VAC event",
+                              "Simulated battle event"),
+       col=c("red", "blue", "green"), pch = c(19, 17, 19),
+       cex = 0.9, bty = "n")
+dev.off()
+
+
+
 
 # ===========================================================================
 # Descriptive: Computing Avg Distances (between observed/sim - battles/VAC)
@@ -196,26 +231,28 @@ area_capture <- vector()
 for (i in 1:length(widths)) {
   
   # create buffer based on iterative width spec
-  roads_buff <- roads_sub %>% 
+  roads_buff_fun <- subset(roads, ntlclass %in% c("motorway", "primary", "primary_link",
+                                              "secondary", "secondary_link")) %>%
+    gSimplify(tol = 0.01) %>%
+    gIntersection(drc_map, byid = TRUE) %>% 
+    spTransform(CRS("+proj=utm +zone=32")) %>% # need this for accurate buffer width
     gBuffer(width = widths[i]) %>%
     spTransform(CRS("+proj=longlat +ellps=WGS84 ")) %>%
     gIntersection(drc_map, byid = TRUE)
   
   # find intersection of events with buffer area
-  road_battles <- gIntersection(roads_buff, drc_battles, byid = TRUE)
+  road_battles_fun <- gIntersection(roads_buff_fun, drc_battles, byid = TRUE)
   
   # percentage of battles falling within road buffer:
-  battle_capture[i] <- nrow(road_battles@coords) / nrow(drc_battles@coords) 
+  battle_capture[i] <- nrow(road_battles_fun@coords) / nrow(drc_battles@coords) 
   # percentage of country territory covered by buffer
-  area_capture[i] <- area(roads_buff) / area(drc_map) 
+  area_capture[i] <- area(roads_buff_fun) / area(drc_map) 
   
 }
 
 buffer_percentages <- data.frame(battle_capture, area_capture, width = 1:10)
 
-# or:
-# buffer_percentages <- read.csv("buffer_width_sensitivity.csv")
-
+jpeg("demo_plot4.jpg",units="px", width=1600, height=1600, res=300)
 ggplot() + 
   geom_line(data = buffer_percentages, aes(width, battle_capture*100), col = "darkgrey") + 
   geom_line(data = buffer_percentages, aes(width, area_capture*100), col = "black") + 
@@ -226,7 +263,7 @@ ggplot() +
        title = "Coverage sensitivity of road buffer") + 
   coord_cartesian(ylim = c(0, 100)) + 
   scale_x_continuous(breaks = 1:10)
-
+dev.off()
 
 # ---------- Observed events ----------
 
@@ -398,7 +435,7 @@ sp_point4 <- cbind(vac_events$LONGITUDE, vac_events$LATITUDE)
 colnames(sp_point4) <- c("LONG","LAT") 
 
 mwa_events_1 <- SpatialPointsDataFrame(coords = sp_point2, data = road_sim_events, 
-                                       proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+                                     proj4string = CRS("+proj=longlat +ellps=WGS84 "))
 mwa_events_2 <- SpatialPointsDataFrame(coords = sp_point3, data = road_battle_events, 
                                        proj4string = CRS("+proj=longlat +ellps=WGS84 "))
 mwa_events_3 <- SpatialPointsDataFrame(coords = sp_point4, data = vac_events, 
@@ -428,6 +465,68 @@ kinshasa <- SpatialPointsDataFrame(coords = kinshasa, data = kinshasa,
 mwa_events_1$capdist <- distm(mwa_events_1, kinshasa)
 mwa_events_2$capdist <- distm(mwa_events_2, kinshasa)
 mwa_events_3$capdist <- distm(mwa_events_3, kinshasa)
+
+
+# Covariate 2: Distance to nearest settlement and number of settlements w/i 5km
+settlements <- readOGR("Localite.shp")
+settlements@coords <- settlements@coords / 100000
+settlements@proj4string <- CRS("+proj=longlat +ellps=WGS84 ")
+
+mwa_events_1$settledist <- distm(mwa_events_1, settlements)
+
+mwa1_settle_nearest <- vector()
+mwa1_isolation <- vector()
+
+for (i in 1:nrow(mwa_events_1$settledist)) {
+  
+  # distance to nearest settlement
+  distances <- sort(c(mwa_events_1$settledist[i,]))
+  mwa1_settle_nearest[i] <- distances[1]
+  
+  # number of settlements within 5km of event
+  mwa1_isolation[i] <- length(distances[distances < 5000])
+  
+}
+
+## ---
+
+mwa_events_2$settledist <- distm(mwa_events_2, settlements)
+
+mwa2_settle_nearest <- vector()
+mwa2_isolation <- vector()
+
+for (i in 1:nrow(mwa_events_2$settledist)) {
+  
+  # distance to nearest settlement
+  distances <- sort(c(mwa_events_2$settledist[i,]))
+  mwa2_settle_nearest[i] <- distances[1]
+  
+  # number of settlements within 5km of event
+  mwa2_isolation[i] <- length(distances[distances < 5000])
+  
+}
+
+
+
+## --- 
+
+
+mwa_events_3$settledist <- distm(mwa_events_3, settlements)
+
+mwa3_settle_nearest <- vector()
+mwa3_isolation <- vector()
+
+for (i in 1:nrow(mwa_events_3$settledist)) {
+  
+  # distance to nearest settlement
+  distances <- sort(c(mwa_events_3$settledist[i,]))
+  mwa3_settle_nearest[i] <- distances[1]
+  
+  # number of settlements within 5km of event
+  mwa3_isolation[i] <- length(distances[distances < 5000])
+  
+}
+
 
 
 
@@ -478,7 +577,7 @@ mwa_events_3$num_eth_grp <- t(do.call("cbind", counting))
 
 
 # create the dataset for MWA
-
+  
 dataset <- as.data.frame(cbind(rep(as.character("NA"),nrow(mwa_events))))
 names(dataset) <- "type"
 dataset$lon <- 0.0
@@ -488,6 +587,7 @@ dataset$population <- 0.0
 
 dataset$num_eth_grp <- 0
 dataset$terrain <- 0.0
+dataset$settledist <- 0.0
 dataset$capdist <- 0.0
 
 ## copy stuff in the dataset
@@ -503,12 +603,6 @@ dataset$timestamp <- as.Date(dataset$timestamp)
 #mwa_events$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
 # add covariates, population for now I will add some more 
 dataset$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
-
-dataset$num_eth_grp  <- c(mwa_events_1$num_eth_grp,mwa_events_2$num_eth_grp,mwa_events_3$num_eth_grp)
-
-dataset$terrain <- c(mwa_events_1$terrain,mwa_events_2$terrain,mwa_events_3$terrain)
-
-dataset$capdist <- c(mwa_events_1$capdist,mwa_events_2$capdist,mwa_events_3$capdist)
 
 
 
@@ -528,12 +622,12 @@ control  <- c("type","control")
 # - column and entries that indicate dependent events 
 dependent <- c("type","dependent")
 # - columns for matching
-matchColumns <- c("population", "num_eth_grp", "terrain", "capdist")
+matchColumns <- c("population")
 
 # Execute method:
 
 dataset1<- dataset[complete.cases(dataset), ] 
-
+ 
 library(rJava)
 options(java.parameters = "-Xmx1g")
 
