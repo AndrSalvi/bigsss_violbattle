@@ -124,9 +124,15 @@ for (i in 1:5) {
   sim.road.df <- rbind(sim.road.df, sims.road)
 }
 
+<<<<<<< HEAD
+# here might be where to change dates to match
+sim.road.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.road.df))
+sim.road.df$date <-sample(road_battle_events$EVENT_DATE, nrow(sim.road.df))
+=======
 # dates of simulated events are sampled from the real ones
 #sim.road.df$date <- sample(seq(as.Date('1997/01/01'), as.Date('2018/07/20'), by="day"), nrow(sim.road.df))
 sim.road.df$date <-sample(as.Date(road_battles$EVENT_DATE), nrow(sim.road.df), replace = TRUE)
+>>>>>>> 1e7c53dcacc079a60933b7b92b1f718aa3213096
 sim.road.df <- sim.road.df %>% arrange(date)
 
 
@@ -161,6 +167,9 @@ proj <- CRS("+proj=longlat +datum=WGS84")
 
 sim.road.sp <- SpatialPointsDataFrame(coords=sim.road.df[,1:2], data=sim.road.df, proj4string=proj) 
 sim.drc.sp <- SpatialPointsDataFrame(coords=sim.drc.df[,1:2], data=sim.drc.df, proj4string=proj) 
+<<<<<<< HEAD
+plot(sim.drc.sp)
+=======
 
 
 # -------Visualize buffer process---------#
@@ -186,6 +195,7 @@ legend("bottomleft", legend=c("VAC event", "Battle event"),
        col=c("red", "blue"), pch = c(1, 2),
        cex = 0.9, bty = "n")
 dev.off()
+>>>>>>> 1e7c53dcacc079a60933b7b92b1f718aa3213096
 
 # III - Add road buffer, grey-out observed VAC 
 jpeg("demo_plot3.jpg",units="px", width=1600, height=1600, res=300)
@@ -241,7 +251,11 @@ for (i in 1:length(widths)) {
     gIntersection(drc_map, byid = TRUE)
   
   # find intersection of events with buffer area
+<<<<<<< HEAD
+  road_battles <- gIntersection(roads_buff, drc_battles, byid = TRUE)
+=======
   road_battles_fun <- gIntersection(roads_buff_fun, drc_battles, byid = TRUE)
+>>>>>>> 1e7c53dcacc079a60933b7b92b1f718aa3213096
   
   # percentage of battles falling within road buffer:
   battle_capture[i] <- nrow(road_battles_fun@coords) / nrow(drc_battles@coords) 
@@ -399,6 +413,11 @@ population <- raster("gpw_v4.asc",
 population_drc <-  crop(population, drc_map)
 
 #Combine all events types in one df
+<<<<<<< HEAD
+
+
+names(sim.road.df)
+=======
 # getting rid of some vars we don't need
 
 colnames(sim.road.df)
@@ -454,8 +473,21 @@ library(rgdal)
 library(dplyr)
 library(rgeos)
 library(geosphere)
+>>>>>>> 1e7c53dcacc079a60933b7b92b1f718aa3213096
 
+road_sim_events <- sim.road.df %>%
+  dplyr::rename(LATITUDE = LAT, LONGITUDE = LONG, EVENT_DATE = TIMESTAMP) %>%
+  dplyr::mutate(type = "control")
 
+<<<<<<< HEAD
+road_battle_events <- road_battles@data %>% 
+  dplyr::mutate(type = "treatment") %>%
+  dplyr::select(LATITUDE, LONGITUDE, EVENT_DATE, type)
+
+vac_events <- drc_vac@data %>%
+  dplyr::mutate(type = "dependent") %>%
+  dplyr::select(LATITUDE, LONGITUDE, EVENT_DATE, type)
+=======
 # Covariate 1: Distance to capital 
 kinshasa <- as.data.frame(rbind(c(15.307045, -4.322447)))
 colnames(kinshasa) <- c("LONG","LAT") 
@@ -465,8 +497,31 @@ kinshasa <- SpatialPointsDataFrame(coords = kinshasa, data = kinshasa,
 mwa_events_1$capdist <- distm(mwa_events_1, kinshasa)
 mwa_events_2$capdist <- distm(mwa_events_2, kinshasa)
 mwa_events_3$capdist <- distm(mwa_events_3, kinshasa)
+>>>>>>> 1e7c53dcacc079a60933b7b92b1f718aa3213096
 
+mwa_events <- rbind(road_sim_events, road_battle_events, vac_events)
 
+<<<<<<< HEAD
+## spat ev
+
+sp_point2 <- cbind(road_sim_events$LONGITUDE, road_sim_events$LATITUDE) 
+colnames(sp_point2) <- c("LONG","LAT") 
+
+sp_point3 <- cbind(road_battle_events$LONGITUDE, road_battle_events$LATITUDE) 
+colnames(sp_point3) <- c("LONG","LAT") 
+
+sp_point4 <- cbind(vac_events$LONGITUDE, vac_events$LATITUDE) 
+colnames(sp_point4) <- c("LONG","LAT") 
+
+mwa_events_1 <- SpatialPointsDataFrame(coords = sp_point2, data = road_sim_events, 
+                                     proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+mwa_events_2 <- SpatialPointsDataFrame(coords = sp_point3, data = road_battle_events, 
+                                       proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+mwa_events_3 <- SpatialPointsDataFrame(coords = sp_point4, data = vac_events, 
+                                       proj4string = CRS("+proj=longlat +ellps=WGS84 "))
+
+# data 
+=======
 # Covariate 2: Distance to nearest settlement and number of settlements w/i 5km
 settlements <- readOGR("Localite.shp")
 settlements@coords <- settlements@coords / 100000
@@ -577,6 +632,7 @@ mwa_events_3$num_eth_grp <- t(do.call("cbind", counting))
 
 
 # create the dataset for MWA
+>>>>>>> 1e7c53dcacc079a60933b7b92b1f718aa3213096
   
 dataset <- as.data.frame(cbind(rep(as.character("NA"),nrow(mwa_events))))
 names(dataset) <- "type"
@@ -585,6 +641,23 @@ dataset$lat <- 0.0
 dataset$timestamp <- as.Date("1900-01-01")
 dataset$population <- 0.0
 
+<<<<<<< HEAD
+
+## copy
+
+dataset$type <- c(rep("control",length(mwa_events_1[,1])),rep("treatment",length(mwa_events_2[,1])),rep("dependent",length(mwa_events_3[,1])))
+
+dataset$lat  <- c(mwa_events_1$LATITUDE,mwa_events_2$LATITUDE,mwa_events_3$LATITUDE)
+dataset$lon  <- c(mwa_events_1$LONGITUDE,mwa_events_2$LONGITUDE,mwa_events_3$LONGITUDE)
+dataset$timestamp  <- c(mwa_events_1$EVENT_DATE,mwa_events_2$EVENT_DATE,mwa_events_3$EVENT_DATE)
+
+# can't figure out how to link up population with the point events, just going to sim for now
+mwa_events$population <- rnorm(nrow(mwa_events), mean = 1000, sd = 500)
+mwa_events$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
+
+dataset$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_2,],population_drc[mwa_events_3,])
+
+=======
 dataset$num_eth_grp <- 0
 dataset$terrain <- 0.0
 dataset$settledist <- 0.0
@@ -607,6 +680,7 @@ dataset$population <- c(population_drc[mwa_events_1,],population_drc[mwa_events_
 
 
 
+>>>>>>> 1e7c53dcacc079a60933b7b92b1f718aa3213096
 
 #MWA Analysis
 # Specify required parameters:
@@ -625,6 +699,12 @@ dependent <- c("type","dependent")
 matchColumns <- c("population")
 
 # Execute method:
+<<<<<<< HEAD
+library(rJava)
+options(java.parameters = "-Xmx1g")
+library(mwa)
+results <- matchedwake(dataset, t_window, spat_window, treatment, control, dependent, matchColumns, weighted = weighted, t_unit = t_unit, TCM = TCM)
+=======
 
 dataset1<- dataset[complete.cases(dataset), ] 
  
@@ -633,6 +713,7 @@ options(java.parameters = "-Xmx1g")
 
 library(mwa)
 results <- matchedwake(dataset1, t_window, spat_window, treatment, control, dependent, matchColumns, weighted = weighted, t_unit = t_unit, TCM = TCM)
+>>>>>>> 1e7c53dcacc079a60933b7b92b1f718aa3213096
 
 plot(results)
 summary(results)
